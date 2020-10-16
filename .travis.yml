@@ -1,0 +1,12 @@
+language: python
+
+dist: bionic
+
+services:
+  - docker
+
+script:
+  - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+  - if [ "$TRAVIS_BRANCH" = "master" ]; then docker build -t "${DOCKER_USER}/${DOCKER_IMAGE}:latest" .; fi
+  - if [ "$TRAVIS_BRANCH" = "master" ]; then docker push "${DOCKER_USER}/${DOCKER_IMAGE}:latest"; fi
