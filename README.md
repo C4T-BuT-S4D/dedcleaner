@@ -33,13 +33,14 @@ For example, if you have a directory structure like:
 ```
 /tmp
 ├── keks
-│   └── asd
+    └── asd
 └── uploads
     └── kekus
         └── kek
 ```
 
-and `DIRS=/tmp/uploads/**/*,/tmp/keks` then dedcleaner will delete all files in `/tmp/uploads/kekus/kek` and `/tmp/keks/asd` directories, resulting in the following structure:
+and `DIRS=/tmp/uploads/**/*,/tmp/keks` then dedcleaner will delete all files in `/tmp/uploads/kekus/kek`
+and `/tmp/keks/asd` directories, resulting in the following structure:
 ```
 /tmp
 ├── keks
