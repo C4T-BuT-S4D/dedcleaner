@@ -1,15 +1,17 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
-	"io/ioutil"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/mattn/go-zglob"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -18,26 +20,53 @@ var (
 	directories []string
 )
 
+func resolve(pattern string) ([]string, error) {
+	entries, err := zglob.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve pattern '%s': %w", pattern, err)
+	}
+
+	// Path to directory is provided, no pattern.
+	if len(entries) == 1 && entries[0] == pattern {
+		dirEntries, err := os.ReadDir(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read directory '%s': %w", pattern, err)
+		}
+		paths := make([]string, 0, len(dirEntries))
+		for _, dirEntry := range dirEntries {
+			paths = append(paths, filepath.Join(pattern, dirEntry.Name()))
+		}
+		return paths, nil
+	}
+
+	return entries, nil
+}
+
 func clean(dir string) error {
 	dirLog := logrus.WithField("dir", dir)
 
-	stats, err := ioutil.ReadDir(dir)
+	paths, err := resolve(dir)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now()
 	cntDeleted := 0
-	for _, stat := range stats {
+	for _, entry := range paths {
+		stat, err := os.Stat(entry)
+		if err != nil {
+			dirLog.Errorf("Failed to stat %s", entry)
+			continue
+		}
 		if stat.Mode().IsRegular() && stat.ModTime().Add(deleteAfter).Before(now) {
-			fp := path.Join(dir, stat.Name())
-			if err := os.Remove(fp); err != nil {
-				dirLog.Errorf("Failed to delete file %s", fp)
+			if err := os.Remove(entry); err != nil {
+				dirLog.Errorf("Failed to delete file %s", entry)
 			} else {
 				cntDeleted += 1
 			}
 		}
 	}
+
 	dirLog.Infof("Cleanup successful, %d files deleted", cntDeleted)
 	return nil
 }
@@ -61,24 +90,13 @@ func main() {
 	logrus.Infof("Running the cleanup every %v", sleep)
 	logrus.Infof("Deleting files that were changed %v ago", deleteAfter)
 
-	for i, dir := range directories {
-		dir = strings.TrimSpace(dir)
-		stat, err := os.Stat(dir)
-		if err != nil {
-			logrus.Fatalf("Failed to stat directory '%s': %v", dir, err)
-		}
-		if !stat.IsDir() {
-			logrus.Fatalf("Error: '%s' is not a directory", dir)
-		}
-		directories[i] = dir
-	}
-
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
 loop:
 	for {
 		for _, d := range directories {
+			d := strings.TrimSpace(d)
 			if err := clean(d); err != nil {
 				log.Fatalf("Failed to clean directory '%s': %v", d, err)
 			}
