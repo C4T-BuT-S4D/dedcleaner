@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -62,7 +61,7 @@ func clean(dir string) error {
 			if err := os.Remove(entry); err != nil {
 				dirLog.Errorf("Failed to delete file %s", entry)
 			} else {
-				cntDeleted += 1
+				cntDeleted++
 			}
 		}
 	}
@@ -93,21 +92,27 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
-loop:
-	for {
+	run := func() {
 		for _, d := range directories {
 			d := strings.TrimSpace(d)
 			if err := clean(d); err != nil {
-				log.Fatalf("Failed to clean directory '%s': %v", d, err)
+				logrus.Fatalf("Failed to clean directory '%s': %v", d, err)
 			}
 		}
-		ticker := time.NewTicker(sleep)
+	}
+
+	ticker := time.NewTicker(sleep)
+	defer ticker.Stop()
+
+	run()
+loop:
+	for {
 		select {
+		case <-ticker.C:
+			run()
 		case <-c:
 			logrus.Infof("Shutting down")
 			break loop
-		case <-ticker.C:
-			ticker.Stop()
 		}
 	}
 }
